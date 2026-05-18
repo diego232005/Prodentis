@@ -1,0 +1,408 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-prodentis-api-collection",
+    "name": "PRODENTIS API",
+    "description": "Colección REST para probar el backend PRODENTIS (Node.js + Express + PostgreSQL).\n\n**Requisitos:**\n1. PostgreSQL con base `prodentis`\n2. `cd backend && npm run dev` (puerto 3001)\n3. Variable `baseUrl` = `http://localhost:3001/api`\n\nLos requests de creación guardan IDs en variables de colección para reutilizarlos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api"
+    },
+    {
+      "key": "patientId",
+      "value": "p1"
+    },
+    {
+      "key": "appointmentId",
+      "value": "a1"
+    },
+    {
+      "key": "inventoryId",
+      "value": "i1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Sistema",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Verifica que el servidor Express esté activo."
+          },
+          "response": []
+        },
+        {
+          "name": "Bootstrap (todos los datos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/bootstrap",
+            "description": "Devuelve pacientes, citas, facturas, inventario, etc. Usado por el frontend al iniciar."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pacientes",
+      "item": [
+        {
+          "name": "Listar pacientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/patients"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener paciente por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/patients/{{patientId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear paciente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('patientId', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-9999\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 123, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Ninguna\",\n  \"medicalNotes\": \"Paciente creado desde Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/patients",
+            "description": "Validaciones: email válido, status enum, documentId único (409 si duplicado)."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar paciente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API Actualizado\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-8888\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 456, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Penicilina\",\n  \"medicalNotes\": \"Actualizado desde Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/patients/{{patientId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar paciente",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/patients/{{patientId}}",
+            "description": "Respuesta 204 sin cuerpo. Usar un ID de prueba, no datos críticos de la demo."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Citas",
+      "item": [
+        {
+          "name": "Listar citas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/appointments"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener cita por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear cita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('appointmentId', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Creada desde Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/appointments",
+            "description": "patientId y dentistId deben existir en la BD (ej. p1, d1). endAt debe ser posterior a startAt."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar cita (estado confirmada)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"confirmed\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Confirmada desde Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar cita",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Inventario",
+      "item": [
+        {
+          "name": "Listar insumos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/inventory"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener insumo por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar movimientos (todos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/inventory/movements"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar movimientos por ítem",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/inventory/movements?itemId={{inventoryId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear insumo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('inventoryId', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 20,\n  \"minStock\": 5,\n  \"unitCost\": 3500,\n  \"supplier\": \"DentalMed\"\n}"
+            },
+            "url": "{{baseUrl}}/inventory",
+            "description": "SKU único. stock y minStock >= 0."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar insumo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman (editado)\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 25,\n  \"minStock\": 8,\n  \"unitCost\": 3800,\n  \"supplier\": \"3M\"\n}"
+            },
+            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar movimiento (entrada)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 10,\n  \"reason\": \"Compra de prueba Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements",
+            "description": "Transacción SQL: actualiza stock + inserta movimiento. type: in | out"
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar movimiento (salida)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"out\",\n  \"quantity\": 2,\n  \"reason\": \"Consumo de prueba Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements"
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar insumo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Validación (ejemplos de error)",
+      "item": [
+        {
+          "name": "Paciente — email inválido (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Error\",\n  \"documentId\": \"88000001\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123\",\n  \"email\": \"no-es-email\",\n  \"address\": \"X\",\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{baseUrl}}/patients"
+          },
+          "response": []
+        },
+        {
+          "name": "Cita — fin antes que inicio (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-20T15:00:00.000Z\",\n  \"endAt\": \"2026-06-20T14:00:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Error de horario\"\n}"
+            },
+            "url": "{{baseUrl}}/appointments"
+          },
+          "response": []
+        },
+        {
+          "name": "Recurso inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/patients/id-que-no-existe"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
