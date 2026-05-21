@@ -139,6 +139,40 @@ export function generateBulkSeed() {
     })
   }
 
+  const todayAppointments: {
+    id: string
+    patientId: string
+    dentistId: string
+    h: number
+    m: number
+    status: AppointmentStatus
+    reason: string
+  }[] = [
+    { id: 'a-today-1', patientId: 'p1', dentistId: 'd1', h: 9, m: 0, status: 'completed', reason: 'Control' },
+    { id: 'a-today-2', patientId: 'p2', dentistId: 'd1', h: 10, m: 30, status: 'completed', reason: 'Limpieza' },
+    { id: 'a-today-3', patientId: 'p3', dentistId: 'd2', h: 11, m: 0, status: 'in_progress', reason: 'Restauración' },
+    { id: 'a-today-4', patientId: 'p4', dentistId: 'd2', h: 14, m: 0, status: 'confirmed', reason: 'Endodoncia' },
+    { id: 'a-today-5', patientId: 'p5', dentistId: 'd1', h: 15, m: 30, status: 'pending', reason: 'Consulta inicial' },
+    { id: 'a-today-6', patientId: 'p6', dentistId: 'd1', h: 16, m: 0, status: 'confirmed', reason: 'Ortodoncia' },
+    { id: 'a-today-7', patientId: 'p7', dentistId: 'd2', h: 17, m: 0, status: 'cancelled', reason: 'Urgencia' },
+  ]
+  for (const t of todayAppointments) {
+    const start = dayAt(0, t.h, t.m)
+    const end = new Date(start.getTime() + 45 * 60000)
+    SEED_APPOINTMENTS.push({
+      id: t.id,
+      patientId: t.patientId,
+      dentistId: t.dentistId,
+      startAt: iso(start),
+      endAt: iso(end),
+      status: t.status,
+      reason: t.reason,
+      notes: '',
+      createdAt: iso(dayAt(-2, 9)),
+      updatedAt: iso(now),
+    })
+  }
+
   const treatStatuses: TreatmentStatus[] = ['planned', 'in_progress', 'completed', 'cancelled']
   const SEED_TREATMENTS: Treatment[] = []
   for (let i = 1; i <= 95; i++) {

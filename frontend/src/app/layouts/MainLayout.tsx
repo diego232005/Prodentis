@@ -15,7 +15,7 @@ export function MainLayout() {
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar role={user.role} />
-      <div className={cn('flex min-h-screen flex-col transition-[margin] duration-200', collapsed ? 'lg:ml-[72px]' : 'lg:ml-56')}>
+      <div className={cn('flex min-h-screen flex-col transition-[margin] duration-200', collapsed ? 'ml-[72px]' : 'ml-56')}>
         <AppHeader user={user} onLogout={logout} />
         <main className="flex-1">
           <Outlet />
