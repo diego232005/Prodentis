@@ -2,48 +2,145 @@
   "info": {
     "_postman_id": "a1b2c3d4-prodentis-api-collection",
     "name": "PRODENTIS API",
-    "description": "Colección REST para probar el backend PRODENTIS (Node.js + Express + PostgreSQL).\n\n**Requisitos:**\n1. PostgreSQL con base `prodentis`\n2. `cd backend && npm run dev` (puerto 3001)\n3. Variable `baseUrl` = `http://localhost:3001/api`\n\nLos requests de creación guardan IDs en variables de colección para reutilizarlos.",
+    "description": "Colección REST para evaluar el backend PRODENTIS (Express + PostgreSQL).\n\n## Requisitos\n1. PostgreSQL con base `prodentis` (`cd backend && npm run db:init`)\n2. `cd backend && npm run dev` → puerto **3001**\n3. Variable de colección `baseUrl` = `http://localhost:3001/api`\n\n## Middleware (flujo de cada petición)\n\n```\nCliente → express.json() → Rutas (/api/...)\n         → express-validator (rules en validators/*.js)\n         → validate.js (middleware)\n              ├─ errores → 400 { error: \"Datos inválidos\", details: [...] }\n              └─ OK → controlador\n         → errorHandler.js\n              ├─ err.status (404, 409, 400 negocio…)\n              └─ sin status → 500\n         → notFound (ruta /api no registrada) → 404 { error: \"Ruta no encontrada\" }\n```\n\n| Capa | Archivo | Qué valida |\n|------|---------|------------|\n| **validate** | `middleware/validate.js` | Formato de body y params (`express-validator`) |\n| **Controlador** | `controllers/*.js` | Reglas de negocio (horarios, FK, stock, duplicados) |\n| **errorHandler** | `middleware/errorHandler.js` | Respuesta JSON unificada `{ error, details? }` |\n| **notFound** | `middleware/errorHandler.js` | Rutas inexistentes bajo `/api` |\n\n## Cómo usar esta colección\n- Carpeta **Casos exitosos**: respuestas 200/201/204 esperadas.\n- Carpeta **Errores — validación (400)**: falla el middleware `validate` antes del controlador.\n- Carpeta **Errores — negocio (404/409/400)**: pasa validación pero falla en controlador o BD.\n- Los requests de error incluyen **Tests** que comprueban status y forma del JSON.\n\nEjecutar primero **Sistema → Health check** y un **Crear paciente** exitoso para poblar variables `patientId`, etc.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:3001/api"
-    },
-    {
-      "key": "patientId",
-      "value": "p1"
-    },
-    {
-      "key": "appointmentId",
-      "value": "a1"
-    },
-    {
-      "key": "inventoryId",
-      "value": "i1"
-    }
+    { "key": "baseUrl", "value": "http://localhost:3001/api" },
+    { "key": "patientId", "value": "p1" },
+    { "key": "appointmentId", "value": "a1" },
+    { "key": "inventoryId", "value": "i1" },
+    { "key": "fakeId", "value": "id-que-no-existe" }
   ],
   "item": [
+    {
+      "name": "00 — Middleware y rutas",
+      "description": "Demuestra el comportamiento de `notFound` y la forma estándar de error del `errorHandler`.",
+      "item": [
+        {
+          "name": "Ruta API no registrada (404 notFound)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 — Ruta no encontrada', () => pm.response.to.have.status(404));",
+                  "pm.test('JSON errorHandler', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.error).to.eql('Ruta no encontrada');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/endpoint-inventado",
+            "description": "No pasa por `validate` ni controladores. El middleware `notFound` responde antes del `errorHandler` con el mismo formato `{ error }`."
+          },
+          "response": []
+        },
+        {
+          "name": "POST sin body JSON (400 express)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 — body inválido o vacío', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([400, 500]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/patients",
+            "description": "Sin `Content-Type: application/json` ni body. Las reglas de `createPatientRules` fallan y `validate` devuelve 400 con `details`."
+          },
+          "response": []
+        },
+        {
+          "name": "Ejemplo respuesta validate (400 + details)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 — middleware validate', () => pm.response.to.have.status(400));",
+                  "pm.test('Estructura errorHandler', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.error).to.eql('Datos inválidos');",
+                  "  pm.expect(j.details).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(j.details[0]).to.have.property('path');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"X\",\n  \"lastName\": \"Test\",\n  \"documentId\": \"123\",\n  \"birthDate\": \"no-es-fecha\",\n  \"phone\": \"\",\n  \"email\": \"mal-email\",\n  \"status\": \"desconocido\"\n}"
+            },
+            "url": "{{baseUrl}}/patients",
+            "description": "Varios campos incumplen `patientValidator.js`. El middleware `validate` corta la petición y no llega al controlador."
+          },
+          "response": []
+        }
+      ]
+    },
     {
       "name": "Sistema",
       "item": [
         {
           "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Servicio activo', () => {",
+                  "  pm.expect(pm.response.json().ok).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/health",
-            "description": "Verifica que el servidor Express esté activo."
+            "description": "Sin middleware de validación. Confirma que Express está en marcha."
           },
           "response": []
         },
         {
           "name": "Bootstrap (todos los datos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/bootstrap",
-            "description": "Devuelve pacientes, citas, facturas, inventario, etc. Usado por el frontend al iniciar."
+            "description": "Carga inicial del frontend. Sin validación de body."
           },
           "response": []
         }
@@ -53,83 +150,330 @@
       "name": "Pacientes",
       "item": [
         {
-          "name": "Listar pacientes",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/patients"
-          },
-          "response": []
-        },
-        {
-          "name": "Obtener paciente por ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/patients/{{patientId}}"
-          },
-          "response": []
-        },
-        {
-          "name": "Crear paciente",
-          "event": [
+          "name": "Casos exitosos",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.collectionVariables.set('patientId', json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
+              "name": "Listar pacientes",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('Array de pacientes', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/patients" },
+              "response": []
+            },
+            {
+              "name": "Obtener paciente por ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('Tiene id', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('patientId')));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/patients/{{patientId}}",
+                "description": "Ruta: `patientIdParam` + `validate` + controlador."
+              },
+              "response": []
+            },
+            {
+              "name": "Crear paciente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  pm.collectionVariables.set('patientId', json.id);",
+                      "  pm.test('ID generado', () => pm.expect(json.id).to.match(/^p/));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-9999\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 123, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Ninguna\",\n  \"medicalNotes\": \"Paciente creado desde Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/patients",
+                "description": "`createPatientRules` → `validate` → `createPatient`."
+              },
+              "response": []
+            },
+            {
+              "name": "Actualizar paciente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API Actualizado\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-8888\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 456, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Penicilina\",\n  \"medicalNotes\": \"Actualizado desde Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/patients/{{patientId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar paciente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/patients/{{patientId}}",
+                "description": "Usar un paciente de prueba creado con POST anterior, no `p1` del seed si necesitas datos demo."
+              },
+              "response": []
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-9999\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 123, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Ninguna\",\n  \"medicalNotes\": \"Paciente creado desde Postman\"\n}"
-            },
-            "url": "{{baseUrl}}/patients",
-            "description": "Validaciones: email válido, status enum, documentId único (409 si duplicado)."
-          },
-          "response": []
+          ]
         },
         {
-          "name": "Actualizar paciente",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Prueba API Actualizado\",\n  \"documentId\": \"99001234\",\n  \"birthDate\": \"1990-05-15\",\n  \"phone\": \"+54 11 5555-8888\",\n  \"email\": \"juan.prueba.api@test.com\",\n  \"address\": \"Av. Demo 456, CABA\",\n  \"status\": \"active\",\n  \"allergies\": \"Penicilina\",\n  \"medicalNotes\": \"Actualizado desde Postman\"\n}"
+          "name": "Errores — validación middleware (400)",
+          "description": "Falla en `validate.js` — mensaje fijo `Datos inválidos` y array `details` de express-validator.",
+          "item": [
+            {
+              "name": "Email inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('validate middleware', () => {",
+                      "  const j = pm.response.json();",
+                      "  pm.expect(j.error).to.eql('Datos inválidos');",
+                      "  pm.expect(j.details.some(d => d.path === 'email')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Error\",\n  \"documentId\": \"88000001\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123456\",\n  \"email\": \"no-es-email\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{baseUrl}}/patients"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/patients/{{patientId}}"
-          },
-          "response": []
+            {
+              "name": "Status enum inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo status', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'status')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Error\",\n  \"documentId\": \"88000002\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123456\",\n  \"email\": \"test@mail.com\",\n  \"status\": \"eliminado\"\n}"
+                },
+                "url": "{{baseUrl}}/patients",
+                "description": "Solo permite: active | inactive | archived"
+              },
+              "response": []
+            },
+            {
+              "name": "Nombre demasiado corto",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo firstName', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'firstName')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"A\",\n  \"lastName\": \"Apellido\",\n  \"documentId\": \"88000003\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123456\",\n  \"email\": \"corto@mail.com\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{baseUrl}}/patients",
+                "description": "min 2 caracteres en firstName/lastName"
+              },
+              "response": []
+            },
+            {
+              "name": "documentId demasiado corto",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('400', () => pm.response.to.have.status(400));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Error\",\n  \"documentId\": \"12345\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123456\",\n  \"email\": \"doc@mail.com\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{baseUrl}}/patients",
+                "description": "documentId: min 6 caracteres"
+              },
+              "response": []
+            }
+          ]
         },
         {
-          "name": "Eliminar paciente",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/patients/{{patientId}}",
-            "description": "Respuesta 204 sin cuerpo. Usar un ID de prueba, no datos críticos de la demo."
-          },
-          "response": []
+          "name": "Errores — negocio y BD (404 / 409)",
+          "description": "Pasa `validate` pero el controlador o PostgreSQL rechazan la operación.",
+          "item": [
+            {
+              "name": "GET paciente inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('404', () => pm.response.to.have.status(404));",
+                      "pm.test('Mensaje controlador', () => {",
+                      "  pm.expect(pm.response.json().error).to.eql('Paciente no encontrado');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/patients/{{fakeId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "PUT paciente inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Fantasma\",\n  \"lastName\": \"Usuario\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{baseUrl}}/patients/{{fakeId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE paciente inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/patients/{{fakeId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Documento duplicado seed p1 (409)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "pm.test('Mensaje duplicado', () => {",
+                      "  pm.expect(pm.response.json().error).to.include('documento');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Duplicado\",\n  \"lastName\": \"Prueba\",\n  \"documentId\": \"20000137\",\n  \"birthDate\": \"1985-03-10\",\n  \"phone\": \"+54 11 0000-0000\",\n  \"email\": \"duplicado.p1@test.com\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{baseUrl}}/patients",
+                "description": "document_id de `p1` en seed (20000000 + 1×137). Controlador captura código PG 23505."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -137,82 +481,287 @@
       "name": "Citas",
       "item": [
         {
-          "name": "Listar citas",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/appointments"
-          },
-          "response": []
-        },
-        {
-          "name": "Obtener cita por ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
-          },
-          "response": []
-        },
-        {
-          "name": "Crear cita",
-          "event": [
+          "name": "Casos exitosos",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.collectionVariables.set('appointmentId', json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
+              "name": "Listar citas",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/appointments" },
+              "response": []
+            },
+            {
+              "name": "Obtener cita por ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Crear cita",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('appointmentId', pm.response.json().id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Creada desde Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments"
+              },
+              "response": []
+            },
+            {
+              "name": "Actualizar cita (confirmada)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"confirmed\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Confirmada desde Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar cita",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('204', () => pm.response.to.have.status(204));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/appointments/{{appointmentId}}"
+              },
+              "response": []
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Creada desde Postman\"\n}"
-            },
-            "url": "{{baseUrl}}/appointments",
-            "description": "patientId y dentistId deben existir en la BD (ej. p1, d1). endAt debe ser posterior a startAt."
-          },
-          "response": []
+          ]
         },
         {
-          "name": "Actualizar cita (estado confirmada)",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-15T14:00:00.000Z\",\n  \"endAt\": \"2026-06-15T14:45:00.000Z\",\n  \"status\": \"confirmed\",\n  \"reason\": \"Consulta de prueba\",\n  \"notes\": \"Confirmada desde Postman\"\n}"
+          "name": "Errores — validación middleware (400)",
+          "item": [
+            {
+              "name": "Fechas ISO inválidas",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 validate', () => pm.response.to.have.status(400));",
+                      "pm.test('Datos inválidos', () => pm.expect(pm.response.json().error).to.eql('Datos inválidos'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"ayer\",\n  \"endAt\": \"mañana\",\n  \"status\": \"pending\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
-          },
-          "response": []
+            {
+              "name": "Status enum inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo status', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'status')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-07-01T10:00:00.000Z\",\n  \"endAt\": \"2026-07-01T11:00:00.000Z\",\n  \"status\": \"programada\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments"
+              },
+              "response": []
+            },
+            {
+              "name": "patientId vacío",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('400', () => pm.response.to.have.status(400));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-07-01T10:00:00.000Z\",\n  \"endAt\": \"2026-07-01T11:00:00.000Z\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments"
+              },
+              "response": []
+            }
+          ]
         },
         {
-          "name": "Eliminar cita",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/appointments/{{appointmentId}}"
-          },
-          "response": []
+          "name": "Errores — negocio (400 / 404)",
+          "item": [
+            {
+              "name": "Fin antes que inicio (400 controlador)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 negocio', () => pm.response.to.have.status(400));",
+                      "pm.test('Sin details de validator', () => {",
+                      "  const j = pm.response.json();",
+                      "  pm.expect(j.error).to.eql('La hora de fin debe ser posterior al inicio');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-20T15:00:00.000Z\",\n  \"endAt\": \"2026-06-20T14:00:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Error de horario\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments",
+                "description": "Pasa `validate` (fechas ISO válidas). Falla en `createAppointment` del controlador."
+              },
+              "response": []
+            },
+            {
+              "name": "Paciente u odontólogo inexistente (400 FK)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('FK inválida', () => {",
+                      "  pm.expect(pm.response.json().error).to.include('no válido');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"{{fakeId}}\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-08-01T09:00:00.000Z\",\n  \"endAt\": \"2026-08-01T10:00:00.000Z\",\n  \"status\": \"pending\"\n}"
+                },
+                "url": "{{baseUrl}}/appointments"
+              },
+              "response": []
+            },
+            {
+              "name": "GET cita inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('404', () => pm.response.to.have.status(404));",
+                      "pm.test('Mensaje', () => pm.expect(pm.response.json().error).to.eql('Cita no encontrada'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/appointments/{{fakeId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE cita inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/appointments/{{fakeId}}"
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -220,187 +769,372 @@
       "name": "Inventario",
       "item": [
         {
-          "name": "Listar insumos",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/inventory"
-          },
-          "response": []
-        },
-        {
-          "name": "Obtener insumo por ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
-          },
-          "response": []
-        },
-        {
-          "name": "Listar movimientos (todos)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/inventory/movements"
-          },
-          "response": []
-        },
-        {
-          "name": "Listar movimientos por ítem",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/inventory/movements?itemId={{inventoryId}}"
-          },
-          "response": []
-        },
-        {
-          "name": "Crear insumo",
-          "event": [
+          "name": "Casos exitosos",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.collectionVariables.set('inventoryId', json.id);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
+              "name": "Listar insumos",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/inventory" },
+              "response": []
+            },
+            {
+              "name": "Obtener insumo por ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Listar movimientos (todos)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/movements"
+              },
+              "response": []
+            },
+            {
+              "name": "Listar movimientos por ítem",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/movements?itemId={{inventoryId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Crear insumo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('inventoryId', pm.response.json().id);",
+                      "}",
+                      "pm.test('201', () => pm.response.to.have.status(201));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 20,\n  \"minStock\": 5,\n  \"unitCost\": 3500,\n  \"supplier\": \"DentalMed\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory"
+              },
+              "response": []
+            },
+            {
+              "name": "Actualizar insumo",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman (editado)\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 25,\n  \"minStock\": 8,\n  \"unitCost\": 3800,\n  \"supplier\": \"3M\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Registrar movimiento (entrada)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('201', () => pm.response.to.have.status(201));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 10,\n  \"reason\": \"Compra de prueba Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements",
+                "description": "`movementRules` → `validate` → transacción SQL en controlador."
+              },
+              "response": []
+            },
+            {
+              "name": "Registrar movimiento (salida)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"out\",\n  \"quantity\": 2,\n  \"reason\": \"Consumo de prueba Postman\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements"
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar insumo",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/{{inventoryId}}"
+              },
+              "response": []
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 20,\n  \"minStock\": 5,\n  \"unitCost\": 3500,\n  \"supplier\": \"DentalMed\"\n}"
-            },
-            "url": "{{baseUrl}}/inventory",
-            "description": "SKU único. stock y minStock >= 0."
-          },
-          "response": []
+          ]
         },
         {
-          "name": "Actualizar insumo",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sku\": \"POSTMAN-001\",\n  \"name\": \"Insumo de prueba Postman (editado)\",\n  \"category\": \"Material\",\n  \"unit\": \"unidad\",\n  \"stock\": 25,\n  \"minStock\": 8,\n  \"unitCost\": 3800,\n  \"supplier\": \"3M\"\n}"
+          "name": "Errores — validación middleware (400)",
+          "item": [
+            {
+              "name": "Stock negativo en creación",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 validate', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo stock', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'stock')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"NEG-001\",\n  \"name\": \"Stock inválido\",\n  \"category\": \"Test\",\n  \"unit\": \"u\",\n  \"stock\": -5,\n  \"minStock\": 0,\n  \"unitCost\": 100\n}"
+                },
+                "url": "{{baseUrl}}/inventory"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
-          },
-          "response": []
+            {
+              "name": "Tipo de movimiento inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo type', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'type')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"ajuste\",\n  \"quantity\": 1,\n  \"reason\": \"Tipo no permitido\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/i1/movements",
+                "description": "Solo `in` | `out`"
+              },
+              "response": []
+            },
+            {
+              "name": "Cantidad cero en movimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('400', () => pm.response.to.have.status(400));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 0,\n  \"reason\": \"Cantidad mínima 1\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/i1/movements"
+              },
+              "response": []
+            },
+            {
+              "name": "Movimiento sin motivo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400', () => pm.response.to.have.status(400));",
+                      "pm.test('Campo reason', () => {",
+                      "  pm.expect(pm.response.json().details.some(d => d.path === 'reason')).to.be.true;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 5,\n  \"reason\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/i1/movements"
+              },
+              "response": []
+            }
+          ]
         },
         {
-          "name": "Registrar movimiento (entrada)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 10,\n  \"reason\": \"Compra de prueba Postman\"\n}"
+          "name": "Errores — negocio y BD (400 / 404 / 409)",
+          "item": [
+            {
+              "name": "Stock insuficiente en salida (400)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 negocio', () => pm.response.to.have.status(400));",
+                      "pm.test('Mensaje stock', () => {",
+                      "  pm.expect(pm.response.json().error).to.eql('Stock insuficiente');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"out\",\n  \"quantity\": 999999,\n  \"reason\": \"Salida excesiva de prueba\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/i1/movements",
+                "description": "Pasa `movementRules`. Falla en transacción del controlador."
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements",
-            "description": "Transacción SQL: actualiza stock + inserta movimiento. type: in | out"
-          },
-          "response": []
-        },
-        {
-          "name": "Registrar movimiento (salida)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"out\",\n  \"quantity\": 2,\n  \"reason\": \"Consumo de prueba Postman\"\n}"
+            {
+              "name": "SKU duplicado seed GU (409)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409', () => pm.response.to.have.status(409));",
+                      "pm.test('SKU duplicado', () => pm.expect(pm.response.json().error).to.eql('SKU duplicado'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"GU\",\n  \"name\": \"Copia guantes\",\n  \"category\": \"Protección\",\n  \"unit\": \"caja\",\n  \"stock\": 1,\n  \"minStock\": 0,\n  \"unitCost\": 1000\n}"
+                },
+                "url": "{{baseUrl}}/inventory"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/inventory/{{inventoryId}}/movements"
-          },
-          "response": []
-        },
-        {
-          "name": "Eliminar insumo",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/inventory/{{inventoryId}}"
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Validación (ejemplos de error)",
-      "item": [
-        {
-          "name": "Paciente — email inválido (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Error\",\n  \"documentId\": \"88000001\",\n  \"birthDate\": \"1990-01-01\",\n  \"phone\": \"123\",\n  \"email\": \"no-es-email\",\n  \"address\": \"X\",\n  \"status\": \"active\"\n}"
+            {
+              "name": "GET insumo inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('404', () => pm.response.to.have.status(404));",
+                      "pm.test('Mensaje', () => pm.expect(pm.response.json().error).to.eql('Insumo no encontrado'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/{{fakeId}}"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/patients"
-          },
-          "response": []
-        },
-        {
-          "name": "Cita — fin antes que inicio (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"patientId\": \"p1\",\n  \"dentistId\": \"d1\",\n  \"startAt\": \"2026-06-20T15:00:00.000Z\",\n  \"endAt\": \"2026-06-20T14:00:00.000Z\",\n  \"status\": \"pending\",\n  \"reason\": \"Error de horario\"\n}"
+            {
+              "name": "Movimiento en insumo inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"in\",\n  \"quantity\": 1,\n  \"reason\": \"Ítem fantasma\"\n}"
+                },
+                "url": "{{baseUrl}}/inventory/{{fakeId}}/movements"
+              },
+              "response": []
             },
-            "url": "{{baseUrl}}/appointments"
-          },
-          "response": []
-        },
-        {
-          "name": "Recurso inexistente (404)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/patients/id-que-no-existe"
-          },
-          "response": []
+            {
+              "name": "DELETE insumo inexistente (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/inventory/{{fakeId}}"
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
