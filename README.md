@@ -104,7 +104,6 @@ Desarrollo Web/
 └── DOCUMENTACION_PROFESORES.md
 ```
 
-Documentación académica detallada: [DOCUMENTACION_PROFESORES.md](./DOCUMENTACION_PROFESORES.md)
 
 Colección Postman: [postman/PRODENTIS-API.postman_collection.json](./postman/PRODENTIS-API.postman_collection.json)
 
