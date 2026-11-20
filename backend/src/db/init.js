@@ -18,12 +18,19 @@ import {
   seedMovements,
   seedClinic,
 } from './seedData.js'
+import { seedExtras } from './seedExtras.js'
+import { refreshTodayDemo } from './refreshToday.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 async function runSchema() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8')
   await query(schema)
+}
+
+async function runMigrations() {
+  const sql = fs.readFileSync(path.join(__dirname, 'migrate.sql'), 'utf8')
+  await query(sql)
 }
 
 const CHUNK = 80
@@ -47,6 +54,9 @@ async function insertRows(table, columns, rows) {
 async function resetDatabase() {
   await query(`
     TRUNCATE TABLE
+      cash_closures, treatment_plan_items, treatment_plans, diagnostic_files, prescriptions, medications,
+      periodontograms, odontogram_snapshots, consents, consent_templates, dentist_blocks, dentist_availability,
+      dental_chairs,
       stock_movements, invoice_lines, payments, invoices,
       clinical_entries, odontograms, treatments, appointments,
       inventory_items, patients, procedures, dentists, users,
@@ -108,11 +118,16 @@ async function seedAll() {
 
 export async function ensureDatabase({ force = false } = {}) {
   await runSchema()
+  await runMigrations()
   const { rows } = await query('SELECT COUNT(*)::int AS n FROM patients')
-  if (rows[0].n > 0 && !force) return false
-  if (force) await resetDatabase()
-  await seedAll()
-  return true
+  const shouldSeed = rows[0].n === 0 || force
+  if (shouldSeed) {
+    if (force) await resetDatabase()
+    await seedAll()
+  }
+  await seedExtras()
+  await refreshTodayDemo()
+  return shouldSeed
 }
 
 if (process.argv[1]?.endsWith('init.js')) {

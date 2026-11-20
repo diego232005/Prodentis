@@ -1,14 +1,8 @@
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
+import { appointmentLabels } from '@/lib/constants/appointmentStatus'
 import type { AppointmentStatus, InvoiceStatus, PatientStatus, TreatmentStatus } from '@/types/common'
 
-const appointmentLabels: Record<AppointmentStatus, string> = {
-  pending: 'Pendiente',
-  confirmed: 'Confirmada',
-  in_progress: 'En atención',
-  completed: 'Finalizada',
-  cancelled: 'Cancelada',
-}
 
 const invoiceLabels: Record<InvoiceStatus, string> = {
   pending: 'Pendiente',
@@ -31,7 +25,8 @@ const treatmentLabels: Record<TreatmentStatus, string> = {
 }
 
 function appointmentVariant(s: AppointmentStatus): React.ComponentProps<typeof Badge>['variant'] {
-  if (s === 'cancelled') return 'destructive'
+  if (s === 'cancelled' || s === 'no_show') return 'destructive'
+  if (s === 'waiting') return 'warning'
   if (s === 'completed') return 'success'
   if (s === 'in_progress') return 'warning'
   if (s === 'confirmed') return 'default'

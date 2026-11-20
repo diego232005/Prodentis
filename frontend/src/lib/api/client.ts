@@ -1,11 +1,22 @@
 import axios, { type AxiosError } from 'axios'
 import { ApiError } from '@/lib/api/errors'
+import { useSessionStore } from '@/app/store/useSessionStore'
 
 const baseURL = import.meta.env.VITE_API_URL ?? '/api'
 
 export const http = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
+})
+
+http.interceptors.request.use((config) => {
+  const user = useSessionStore.getState().user
+  if (user) {
+    config.headers.set('X-User-Id', user.id)
+    config.headers.set('X-User-Role', user.role)
+    config.headers.set('X-User-Name', encodeURIComponent(user.name))
+  }
+  return config
 })
 
 http.interceptors.response.use(

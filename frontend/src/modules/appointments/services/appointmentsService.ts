@@ -34,7 +34,8 @@ export async function cancelAppointment(id: string): Promise<void> {
 export async function setAppointmentStatus(id: string, status: AppointmentStatus): Promise<Appointment> {
   const cur = useAppDataStore.getState().appointments.find((x) => x.id === id)
   if (!cur) return apiClient.put<Appointment>(`/appointments/${id}`, { status })
-  const next = await apiClient.put<Appointment>(`/appointments/${id}`, { ...cur, status })
+  const arrivedAt = status === 'waiting' ? new Date().toISOString() : cur.arrivedAt
+  const next = await apiClient.put<Appointment>(`/appointments/${id}`, { ...cur, status, arrivedAt })
   useAppDataStore.getState().upsertAppointment(next)
   return next
 }

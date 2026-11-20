@@ -2,8 +2,14 @@ import { apiClient } from '@/lib/api/client'
 import { useAppDataStore } from '@/app/store/useAppDataStore'
 import type {
   Appointment,
+  CashClosure,
   ClinicalEntry,
+  ConsentTemplate,
+  DentalChair,
   Dentist,
+  DentistAvailability,
+  DentistBlock,
+  Medication,
   InventoryItem,
   Invoice,
   MockUser,
@@ -32,6 +38,12 @@ export interface BootstrapPayload {
   movements: StockMovement[]
   clinic: ClinicSettings
   staffAccounts: MockUserAccount[]
+  chairs?: DentalChair[]
+  dentistAvailability?: DentistAvailability[]
+  dentistBlocks?: DentistBlock[]
+  consentTemplates?: ConsentTemplate[]
+  medications?: Medication[]
+  cashClosures?: CashClosure[]
 }
 
 export async function fetchBootstrap(): Promise<BootstrapPayload> {
@@ -55,5 +67,11 @@ export async function hydrateAppFromApi(): Promise<void> {
     movements: data.movements,
     clinic: data.clinic,
     staffAccounts: data.staffAccounts,
+    chairs: data.chairs ?? [],
+    dentistAvailability: data.dentistAvailability ?? [],
+    dentistBlocks: data.dentistBlocks ?? [],
+    consentTemplates: data.consentTemplates ?? [],
+    medications: data.medications ?? [],
+    cashClosures: data.cashClosures ?? [],
   })
 }

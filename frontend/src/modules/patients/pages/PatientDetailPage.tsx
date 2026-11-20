@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { Pencil, Stethoscope } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageTitle } from "@/components/shared/PageTitle";
+import { AllergyAlert } from "@/components/shared/AllergyAlert";
 import { InfoGrid } from "@/components/shared/InfoGrid";
 import { SectionCard } from "@/components/shared/SectionCard";
 import { PatientStatusBadge } from "@/components/shared/StatusBadge";
@@ -64,11 +65,25 @@ export function PatientDetailPage() {
           </>
         }
       />
+      <AllergyAlert allergies={p.allergies} />
       <div className="grid gap-6 lg:grid-cols-3">
         <SectionCard title="Datos de contacto" className="lg:col-span-2">
           <InfoGrid
             items={[
               { label: "Teléfono", value: p.phone },
+              { label: "Ocupación", value: p.occupation || "—" },
+              {
+                label: "Contacto de emergencia",
+                value: p.emergencyContactName
+                  ? `${p.emergencyContactName} ${p.emergencyContactPhone ?? ""}`
+                  : "—",
+              },
+              {
+                label: "Obra social",
+                value: p.insuranceProvider
+                  ? `${p.insuranceProvider} ${p.insuranceNumber ?? ""}`
+                  : "—",
+              },
               { label: "Correo", value: p.email },
               { label: "Dirección", value: p.address },
               { label: "Fecha de nacimiento", value: formatDate(p.birthDate) },
@@ -79,10 +94,26 @@ export function PatientDetailPage() {
             ]}
           />
         </SectionCard>
-        <SectionCard title="Antecedentes">
+        <SectionCard title="Anamnesis">
           <InfoGrid
             items={[
               { label: "Alergias", value: p.allergies || "—" },
+              { label: "Grupo sanguíneo", value: p.bloodType || "—" },
+              { label: "Medicación actual", value: p.currentMedications || "—" },
+              { label: "Enfermedades crónicas", value: p.chronicDiseases || "—" },
+              { label: "Cirugías previas", value: p.previousSurgeries || "—" },
+              {
+                label: "Hábitos / condiciones",
+                value:
+                  [
+                    p.isPregnant && "Embarazo",
+                    p.smoker && "Fumador",
+                    p.bruxism && "Bruxismo",
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "—",
+              },
+              { label: "Notas de anamnesis", value: p.anamnesisNotes || "—" },
               { label: "Notas médicas", value: p.medicalNotes || "—" },
             ]}
           />

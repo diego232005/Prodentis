@@ -2,6 +2,18 @@ import { query } from '../config/database.js'
 import { mappers } from '../utils/mappers.js'
 import { createId } from '../utils/id.js'
 
+const ANAMNESIS = [
+  ['bloodType', 'blood_type', ''],
+  ['systemicConditions', 'systemic_conditions', ''],
+  ['currentMedications', 'current_medications', ''],
+  ['emergencyContactName', 'emergency_contact_name', ''],
+  ['emergencyContactPhone', 'emergency_contact_phone', ''],
+  ['isSmoker', 'is_smoker', false],
+  ['isPregnant', 'is_pregnant', false],
+  ['takesAnticoagulants', 'takes_anticoagulants', false],
+  ['anamnesisNotes', 'anamnesis_notes', ''],
+]
+
 export async function listPatients(_req, res, next) {
   try {
     const { rows } = await query('SELECT * FROM patients ORDER BY updated_at DESC')
@@ -31,8 +43,10 @@ export async function createPatient(req, res, next) {
     const now = new Date().toISOString()
     const b = req.body
     const { rows } = await query(
-      `INSERT INTO patients (id, first_name, last_name, document_id, birth_date, phone, email, address, status, allergies, medical_notes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) RETURNING *`,
+      `INSERT INTO patients (id, first_name, last_name, document_id, birth_date, phone, email, address, status, allergies, medical_notes, created_at, updated_at,
+         ${ANAMNESIS.map(([, col]) => col).join(', ')}, anamnesis_updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,
+         ${ANAMNESIS.map((_, i) => `$${13 + i}`).join(',')}, CASE WHEN $${13 + ANAMNESIS.length}::boolean THEN $12::timestamptz END) RETURNING *`,
       [
         id,
         b.firstName,
@@ -46,6 +60,8 @@ export async function createPatient(req, res, next) {
         b.allergies ?? '',
         b.medicalNotes ?? '',
         now,
+        ...ANAMNESIS.map(([key,, def]) => b[key] ?? def),
+        ANAMNESIS.some(([key]) => b[key] !== undefined),
       ],
     )
     res.status(201).json(mappers.patient(rows[0]))
@@ -72,7 +88,9 @@ export async function updatePatient(req, res, next) {
       `UPDATE patients SET
         first_name = $2, last_name = $3, document_id = $4, birth_date = $5,
         phone = $6, email = $7, address = $8, status = $9,
-        allergies = $10, medical_notes = $11, updated_at = NOW()
+        allergies = $10, medical_notes = $11, updated_at = NOW(),
+        ${ANAMNESIS.map(([, col], i) => `${col} = $${12 + i}`).join(', ')},
+        anamnesis_updated_at = CASE WHEN $${12 + ANAMNESIS.length}::boolean THEN NOW() ELSE anamnesis_updated_at END
        WHERE id = $1 RETURNING *`,
       [
         req.params.id,
@@ -86,6 +104,8 @@ export async function updatePatient(req, res, next) {
         b.status ?? r.status,
         b.allergies ?? r.allergies,
         b.medicalNotes ?? r.medical_notes,
+        ...ANAMNESIS.map(([key, col]) => b[key] ?? r[col]),
+        ANAMNESIS.some(([key]) => b[key] !== undefined),
       ],
     )
     res.json(mappers.patient(rows[0]))

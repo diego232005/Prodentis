@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { FileDown } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -35,9 +36,11 @@ import {
 } from "@/modules/billing/schemas/invoiceSchema";
 import {
   getInvoice,
+  listPayments,
   registerPayment,
   setInvoiceStatus,
 } from "@/modules/billing/services/billingService";
+import { downloadCashReceiptPdf } from "@/lib/pdf/clinicalPdf";
 import { useAppDataStore } from "@/app/store/useAppDataStore";
 import { ROUTES } from "@/lib/constants/routes";
 import { formatCurrency } from "@/lib/formatters/currency";
@@ -47,11 +50,13 @@ export function InvoiceDetailPage() {
   const { id } = useParams();
   const qc = useQueryClient();
   const patients = useAppDataStore((s) => s.patients);
-  const allPayments = useAppDataStore((s) => s.payments);
-  const payments = React.useMemo(
-    () => allPayments.filter((p) => p.invoiceId === id),
-    [allPayments, id],
-  );
+  const clinic = useAppDataStore((s) => s.clinic);
+  const paymentsQ = useQuery({
+    queryKey: ["payments", id],
+    queryFn: () => listPayments(id!),
+    enabled: Boolean(id),
+  });
+  const payments = paymentsQ.data ?? [];
 
   const q = useQuery({
     queryKey: ["invoice", id],
@@ -68,10 +73,18 @@ export function InvoiceDetailPage() {
 
   const payMut = useMutation({
     mutationFn: registerPayment,
-    onSuccess: () => {
+    onSuccess: ({ payment, invoice }) => {
       toast.success("Pago registrado");
       qc.invalidateQueries({ queryKey: ["invoice", id] });
+      qc.invalidateQueries({ queryKey: ["payments", id] });
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["cash-summary"] });
+      downloadCashReceiptPdf({
+        clinic,
+        patient: patients.find((x) => x.id === invoice.patientId),
+        invoice,
+        payment,
+      });
     },
   });
 
@@ -179,7 +192,7 @@ export function InvoiceDetailPage() {
         <div className="space-y-6">
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <h3 className="mb-4 text-sm font-semibold">
-              Registrar pago (mock)
+              Registrar pago
             </h3>
             <form
               className="space-y-3"
@@ -243,7 +256,21 @@ export function InvoiceDetailPage() {
                   className="flex justify-between rounded-md border px-2 py-1"
                 >
                   <span>{p.method}</span>
-                  <span>{formatCurrency(p.amount)}</span>
+                  <span className="flex items-center gap-2">
+                    {formatCurrency(p.amount)}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1"
+                      title="Descargar recibo"
+                      onClick={() =>
+                        downloadCashReceiptPdf({ clinic, patient, invoice: inv, payment: p })
+                      }
+                    >
+                      <FileDown className="h-4 w-4" />
+                    </Button>
+                  </span>
                 </li>
               ))}
               {payments.length === 0 ? (
@@ -257,7 +284,7 @@ export function InvoiceDetailPage() {
         open={voidOpen}
         onOpenChange={setVoidOpen}
         title="¿Anular factura?"
-        description="El estado pasará a anulada. Es reversible solo editando datos mock manualmente."
+        description="El estado pasará a anulada. Esta acción queda registrada en el servidor."
         confirmLabel="Anular"
         variant="destructive"
         onConfirm={() => voidMut.mutate()}

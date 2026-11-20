@@ -11,6 +11,8 @@ export const createInventoryRules = [
   body('minStock').isInt({ min: 0 }),
   body('unitCost').isFloat({ min: 0 }),
   body('supplier').optional().isString(),
+  body('expiresAt').optional({ nullable: true, values: 'falsy' }).isISO8601(),
+  body('lotNumber').optional().isString().isLength({ max: 64 }),
 ]
 
 export const updateInventoryRules = [
@@ -23,6 +25,8 @@ export const updateInventoryRules = [
   body('minStock').optional().isInt({ min: 0 }),
   body('unitCost').optional().isFloat({ min: 0 }),
   body('supplier').optional().isString(),
+  body('expiresAt').optional({ nullable: true, values: 'falsy' }).isISO8601(),
+  body('lotNumber').optional().isString().isLength({ max: 64 }),
 ]
 
 export const movementRules = [

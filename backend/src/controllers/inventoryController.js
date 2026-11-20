@@ -30,9 +30,9 @@ export async function createInventoryItem(req, res, next) {
     const id = createId('i')
     const b = req.body
     const { rows } = await query(
-      `INSERT INTO inventory_items (id, sku, name, category, unit, stock, min_stock, unit_cost, supplier, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
-      [id, b.sku, b.name, b.category, b.unit, b.stock, b.minStock, b.unitCost, b.supplier ?? ''],
+      `INSERT INTO inventory_items (id, sku, name, category, unit, stock, min_stock, unit_cost, supplier, expires_at, lot_number, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) RETURNING *`,
+      [id, b.sku, b.name, b.category, b.unit, b.stock, b.minStock, b.unitCost, b.supplier ?? '', b.expiresAt || null, b.lotNumber ?? ''],
     )
     res.status(201).json(mappers.inventory(rows[0]))
   } catch (e) {
@@ -57,7 +57,7 @@ export async function updateInventoryItem(req, res, next) {
     const { rows } = await query(
       `UPDATE inventory_items SET
         sku = $2, name = $3, category = $4, unit = $5, stock = $6,
-        min_stock = $7, unit_cost = $8, supplier = $9, updated_at = NOW()
+        min_stock = $7, unit_cost = $8, supplier = $9, expires_at = $10, lot_number = $11, updated_at = NOW()
        WHERE id = $1 RETURNING *`,
       [
         req.params.id,
@@ -69,6 +69,8 @@ export async function updateInventoryItem(req, res, next) {
         b.minStock ?? r.min_stock,
         b.unitCost ?? r.unit_cost,
         b.supplier ?? r.supplier,
+        'expiresAt' in b ? b.expiresAt || null : r.expires_at,
+        b.lotNumber ?? r.lot_number,
       ],
     )
     res.json(mappers.inventory(rows[0]))

@@ -18,7 +18,13 @@ import {
 } from '@/data/seed'
 import type {
   Appointment,
+  CashClosure,
   ClinicalEntry,
+  ConsentTemplate,
+  DentalChair,
+  DentistAvailability,
+  DentistBlock,
+  Medication,
   InventoryItem,
   Invoice,
   MockUserAccount,
@@ -46,6 +52,12 @@ interface AppDataState {
   movements: StockMovement[]
   clinic: ClinicSettings
   staffAccounts: MockUserAccount[]
+  chairs: DentalChair[]
+  dentistAvailability: DentistAvailability[]
+  dentistBlocks: DentistBlock[]
+  consentTemplates: ConsentTemplate[]
+  medications: Medication[]
+  cashClosures: CashClosure[]
   reset: () => void
   upsertPatient: (p: Patient) => void
   deletePatient: (id: string) => void
@@ -81,6 +93,12 @@ const initial = () => ({
   movements: cloneSeed(SEED_MOVEMENTS),
   clinic: cloneSeed(SEED_CLINIC),
   staffAccounts: cloneSeed(SEED_STAFF_ACCOUNTS),
+  chairs: [] as DentalChair[],
+  dentistAvailability: [] as DentistAvailability[],
+  dentistBlocks: [] as DentistBlock[],
+  consentTemplates: [] as ConsentTemplate[],
+  medications: [] as Medication[],
+  cashClosures: [] as CashClosure[],
 })
 
 export const useAppDataStore = create<AppDataState>((set) => ({
